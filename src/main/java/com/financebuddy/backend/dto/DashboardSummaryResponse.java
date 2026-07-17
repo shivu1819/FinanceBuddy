@@ -1,5 +1,6 @@
 package com.financebuddy.backend.dto;
 
+import com.financebuddy.backend.budget.BudgetStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -26,4 +27,14 @@ public class DashboardSummaryResponse {
     private long totalTransactions;
 
     private long totalCategories;
+
+    private BigDecimal monthlyBudget;
+
+    private BigDecimal spentBudget;
+
+    private BigDecimal remainingBudget;
+
+    private Integer budgetUsagePercentage;
+
+    private BudgetStatus budgetStatus;
 }
