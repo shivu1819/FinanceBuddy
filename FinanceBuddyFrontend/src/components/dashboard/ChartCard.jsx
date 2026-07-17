@@ -1,0 +1,2 @@
+function ChartCard({ title, subtitle, children, action }) { return <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/3 sm:p-6"><div className="mb-6 flex items-start justify-between gap-4"><div><h2 className="font-bold text-slate-950">{title}</h2>{subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}</div>{action}</div>{children}</section> }
+export default ChartCard
