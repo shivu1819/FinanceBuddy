@@ -8,6 +8,8 @@ import Categories from '../pages/categories/Categories'
 import Budget from '../pages/budget/Budget'
 import Goals from '../pages/goals/Goals'
 import Profile from '../pages/profile/Profile'
+import AIInsights from '../pages/insights/AIInsights'
+import TaxAnalyzer from '../pages/tax/TaxAnalyzer'
 import NotFound from '../pages/NotFound'
 
 function AppRoutes() {
@@ -19,6 +21,8 @@ function AppRoutes() {
 
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/ai-insights" element={<AIInsights />} />
+        <Route path="/tax-analyzer" element={<TaxAnalyzer />} />
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/categories" element={<Categories />} />
         <Route path="/budget" element={<Budget />} />

@@ -1,0 +1,3 @@
+import { HeartIcon } from '@heroicons/react/24/outline'
+function FinancialHealthCard({ score }) { return <article className="rounded-2xl bg-slate-950 p-5 text-white shadow-lg shadow-slate-950/10"><div className="flex items-start justify-between"><div><p className="text-sm font-medium text-slate-300">Financial health score</p><p className="mt-2 text-4xl font-bold">{score}<span className="text-lg text-slate-400">/100</span></p></div><span className="grid size-11 place-items-center rounded-xl bg-emerald-400 text-slate-950"><HeartIcon className="size-5" /></span></div><p className="mt-4 text-xs text-slate-400">Calculated from your saving rate, expenses, and budget utilization.</p></article> }
+export default FinancialHealthCard

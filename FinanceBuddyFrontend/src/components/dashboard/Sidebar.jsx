@@ -1,12 +1,12 @@
 import {
-  ArrowLeftStartOnRectangleIcon, ChartPieIcon, CreditCardIcon, FlagIcon,
+  ArrowLeftStartOnRectangleIcon, ChartBarSquareIcon, ChartPieIcon, CreditCardIcon, FlagIcon, CalculatorIcon,
   HomeIcon, TagIcon, UserCircleIcon, WalletIcon, XMarkIcon,
 } from '@heroicons/react/24/outline'
 import { NavLink, useNavigate } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth'
 
 const navigation = [
-  { label: 'Dashboard', to: '/dashboard', icon: HomeIcon }, { label: 'Transactions', to: '/transactions', icon: CreditCardIcon },
+  { label: 'Dashboard', to: '/dashboard', icon: HomeIcon }, { label: 'AI Insights', to: '/ai-insights', icon: ChartBarSquareIcon }, { label: 'Tax Analyzer', to: '/tax-analyzer', icon: CalculatorIcon }, { label: 'Transactions', to: '/transactions', icon: CreditCardIcon },
   { label: 'Categories', to: '/categories', icon: TagIcon }, { label: 'Budget', to: '/budget', icon: ChartPieIcon },
   { label: 'Goals', to: '/goals', icon: FlagIcon }, { label: 'Profile', to: '/profile', icon: UserCircleIcon },
 ]
