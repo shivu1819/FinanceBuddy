@@ -18,7 +18,11 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     Optional<Category> findByName(String name);
 
-    Optional<Category> findByUserIdAndName(Long userId, String name);
+    Optional<Category> findByIdAndUserId(Long id, Long userId);
+
+    boolean existsByUserIdAndNormalizedName(Long userId, String normalizedName);
+
+    boolean existsByUserIdAndNormalizedNameAndIdNot(Long userId, String normalizedName, Long id);
 
     @Query("""
             SELECT COUNT(c)

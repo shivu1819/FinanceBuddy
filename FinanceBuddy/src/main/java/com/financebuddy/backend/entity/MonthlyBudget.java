@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
+@Deprecated(since = "B-FIX-1.2", forRemoval = false)
 @Table(
         name = "monthly_budgets",
         uniqueConstraints = @UniqueConstraint(

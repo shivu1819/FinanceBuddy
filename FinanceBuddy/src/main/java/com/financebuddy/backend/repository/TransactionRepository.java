@@ -26,6 +26,10 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 
     List<Transaction> findByUserIdAndBankAccountId(Long userId, Long bankAccountId);
 
+    boolean existsByCategoryIdAndUserId(Long categoryId, Long userId);
+
+    boolean existsByBankAccountIdAndUserId(Long bankAccountId, Long userId);
+
     @Query("""
             SELECT SUM(t.amount)
             FROM Transaction t

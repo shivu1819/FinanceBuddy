@@ -1,6 +1,5 @@
 package com.financebuddy.backend.entity;
 
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -58,11 +57,11 @@ public class BankAccount {
     @Builder.Default
     private Boolean active = true;
 
-    @OneToMany(mappedBy = "bankAccount", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "bankAccount")
     @Builder.Default
     private List<Transaction> transactions = new ArrayList<>();
 
-    @OneToMany(mappedBy = "bankAccount", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "bankAccount")
     @Builder.Default
     private List<RecurringTransaction> recurringTransactions = new ArrayList<>();
 

@@ -6,6 +6,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
@@ -22,7 +23,15 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "transactions")
+@Table(
+        name = "transactions",
+        indexes = {
+                @Index(name = "idx_transactions_user_date", columnList = "user_id, transaction_date"),
+                @Index(name = "idx_transactions_user_type", columnList = "user_id, transaction_type"),
+                @Index(name = "idx_transactions_user_category", columnList = "user_id, category_id"),
+                @Index(name = "idx_transactions_user_bank_account", columnList = "user_id, bank_account_id")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -39,7 +48,7 @@ public class Transaction {
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "bank_account_id", columnDefinition = "BIGINT NULL")
+    @JoinColumn(name = "bank_account_id")
     private BankAccount bankAccount;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

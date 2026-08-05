@@ -17,14 +17,31 @@ import java.util.function.Function;
 @Service
 public class JwtService {
 
-    @Value("${app.jwt.secret:TXlGaW5hbmNlQnVkZHlQcm9kdWN0aW9uUmVhZHlKd3RTZWNyZXRLZXlGb3JEZXY=}")
-    private String jwtSecret;
+    private final SecretKey signingKey;
+    private final long accessTokenExpirationMs;
+    private final long refreshTokenExpirationMs;
 
-    @Value("${app.jwt.access-token-expiration-ms:900000}")
-    private long accessTokenExpirationMs;
+    public JwtService(
+            @Value("${app.jwt.secret}") String jwtSecret,
+            @Value("${app.jwt.access-token-expiration-ms}") long accessTokenExpirationMs,
+            @Value("${app.jwt.refresh-token-expiration-ms}") long refreshTokenExpirationMs
+    ) {
+        if (jwtSecret == null || jwtSecret.isBlank()) {
+            throw new IllegalStateException("JWT_SECRET must be configured and must not be blank.");
+        }
 
-    @Value("${app.jwt.refresh-token-expiration-ms:604800000}")
-    private long refreshTokenExpirationMs;
+        try {
+            byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
+            this.signingKey = Keys.hmacShaKeyFor(keyBytes);
+        } catch (RuntimeException exception) {
+            throw new IllegalStateException(
+                    "JWT_SECRET must be a valid Base64-encoded key of at least 256 bits."
+            );
+        }
+
+        this.accessTokenExpirationMs = accessTokenExpirationMs;
+        this.refreshTokenExpirationMs = refreshTokenExpirationMs;
+    }
 
     public String generateAccessToken(UserDetails userDetails) {
         String role = userDetails.getAuthorities().stream()
@@ -77,7 +94,7 @@ public class JwtService {
                 .subject(userDetails.getUsername())
                 .issuedAt(now)
                 .expiration(expiration)
-                .signWith(getSigningKey())
+                .signWith(signingKey)
                 .compact();
     }
 
@@ -87,14 +104,9 @@ public class JwtService {
 
     private Claims extractAllClaims(String token) {
         return Jwts.parser()
-                .verifyWith(getSigningKey())
+                .verifyWith(signingKey)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
-    }
-
-    private SecretKey getSigningKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
-        return Keys.hmacShaKeyFor(keyBytes);
     }
 }

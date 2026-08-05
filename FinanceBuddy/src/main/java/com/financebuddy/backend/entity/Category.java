@@ -1,6 +1,5 @@
 package com.financebuddy.backend.entity;
 
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -13,6 +12,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -22,9 +22,16 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @Entity
-@Table(name = "categories")
+@Table(
+        name = "categories",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_categories_user_normalized_name",
+                columnNames = {"user_id", "normalized_name"}
+        )
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -43,6 +50,9 @@ public class Category {
     @Column(nullable = false, length = 100)
     private String name;
 
+    @Column(name = "normalized_name", nullable = false, length = 100)
+    private String normalizedName;
+
     @Column(nullable = false, length = 20)
     private String type;
 
@@ -56,15 +66,15 @@ public class Category {
     @Builder.Default
     private Boolean systemDefault = false;
 
-    @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "category")
     @Builder.Default
     private List<Transaction> transactions = new ArrayList<>();
 
-    @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "category")
     @Builder.Default
     private List<MonthlyBudget> monthlyBudgets = new ArrayList<>();
 
-    @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "category")
     @Builder.Default
     private List<RecurringTransaction> recurringTransactions = new ArrayList<>();
 
@@ -76,6 +86,7 @@ public class Category {
 
     @PrePersist
     protected void onCreate() {
+        normalizeName();
         LocalDateTime now = LocalDateTime.now();
         createdAt = now;
         updatedAt = now;
@@ -83,6 +94,14 @@ public class Category {
 
     @PreUpdate
     protected void onUpdate() {
+        normalizeName();
         updatedAt = LocalDateTime.now();
+    }
+
+    private void normalizeName() {
+        if (name != null) {
+            name = name.trim();
+            normalizedName = name.toLowerCase(Locale.ROOT);
+        }
     }
 }

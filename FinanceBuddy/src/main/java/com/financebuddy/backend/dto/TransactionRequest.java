@@ -45,4 +45,6 @@ public class TransactionRequest {
 
     @NotNull(message = "Category ID is required")
     private Long categoryId;
+
+    private Long bankAccountId;
 }

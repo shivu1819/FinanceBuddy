@@ -102,12 +102,7 @@ public class GoalServiceImpl implements GoalService {
 
     private Goal getOwnedGoal(Long id, User user) {
         return goalRepository.findByIdAndUser(id, user)
-                .orElseThrow(() -> {
-                    if (goalRepository.existsById(id)) {
-                        return new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied.");
-                    }
-                    return new ResponseStatusException(HttpStatus.NOT_FOUND, "Goal not found.");
-                });
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Goal not found."));
     }
 
     private User getCurrentUser() {

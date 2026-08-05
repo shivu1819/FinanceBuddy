@@ -14,6 +14,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -25,7 +26,13 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 
 @Entity
-@Table(name = "budgets")
+@Table(
+        name = "budgets",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_budgets_user_month",
+                columnNames = {"user_id", "budget_month"}
+        )
+)
 @Getter
 @Setter
 @NoArgsConstructor

@@ -4,6 +4,7 @@ import com.financebuddy.backend.entity.User;
 import com.financebuddy.backend.repository.TransactionRepository;
 import com.financebuddy.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -47,7 +48,14 @@ public class BudgetServiceImpl implements BudgetService {
                 .updatedAt(now)
                 .build();
 
-        return mapToResponse(budgetRepository.save(budget));
+        try {
+            return mapToResponse(budgetRepository.saveAndFlush(budget));
+        } catch (DataIntegrityViolationException exception) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Budget already exists for this month."
+            );
+        }
     }
 
     @Override
@@ -87,12 +95,7 @@ public class BudgetServiceImpl implements BudgetService {
 
     private Budget getOwnedBudget(Long id, User user) {
         return budgetRepository.findByIdAndUser(id, user)
-                .orElseThrow(() -> {
-                    if (budgetRepository.existsById(id)) {
-                        return new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied.");
-                    }
-                    return new ResponseStatusException(HttpStatus.NOT_FOUND, "Budget not found.");
-                });
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Budget not found."));
     }
 
     private User getCurrentUser() {

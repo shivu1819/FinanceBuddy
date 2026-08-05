@@ -4,8 +4,10 @@ import com.financebuddy.backend.dto.CategoryResponse;
 import com.financebuddy.backend.dto.TransactionRequest;
 import com.financebuddy.backend.dto.TransactionResponse;
 import com.financebuddy.backend.entity.Category;
+import com.financebuddy.backend.entity.BankAccount;
 import com.financebuddy.backend.entity.Transaction;
 import com.financebuddy.backend.entity.User;
+import com.financebuddy.backend.repository.BankAccountRepository;
 import com.financebuddy.backend.repository.CategoryRepository;
 import com.financebuddy.backend.repository.TransactionRepository;
 import com.financebuddy.backend.repository.UserRepository;
@@ -25,6 +27,7 @@ public class TransactionServiceImpl implements TransactionService {
 
     private final TransactionRepository transactionRepository;
     private final CategoryRepository categoryRepository;
+    private final BankAccountRepository bankAccountRepository;
     private final UserRepository userRepository;
 
     @Override
@@ -32,11 +35,13 @@ public class TransactionServiceImpl implements TransactionService {
     public TransactionResponse createTransaction(TransactionRequest request) {
         User user = getCurrentUser();
         Category category = getOwnedCategory(request.getCategoryId(), user);
+        BankAccount bankAccount = getOwnedBankAccount(request.getBankAccountId(), user);
         validateCategoryType(category, request.getTransactionType());
 
         Transaction transaction = Transaction.builder()
                 .user(user)
                 .category(category)
+                .bankAccount(bankAccount)
                 .amount(request.getAmount())
                 .description(request.getDescription())
                 .transactionDate(request.getTransactionDate())
@@ -68,6 +73,9 @@ public class TransactionServiceImpl implements TransactionService {
     public TransactionResponse updateTransaction(Long id, TransactionRequest request) {
         Transaction transaction = getOwnedTransaction(id);
         Category category = getOwnedCategory(request.getCategoryId(), transaction.getUser());
+        BankAccount bankAccount = request.getBankAccountId() == null
+                ? transaction.getBankAccount()
+                : getOwnedBankAccount(request.getBankAccountId(), transaction.getUser());
         validateCategoryType(category, request.getTransactionType());
 
         transaction.setAmount(request.getAmount());
@@ -76,6 +84,7 @@ public class TransactionServiceImpl implements TransactionService {
         transaction.setPaymentMethod(request.getPaymentMethod());
         transaction.setTransactionType(request.getTransactionType());
         transaction.setCategory(category);
+        transaction.setBankAccount(bankAccount);
 
         return mapToResponse(transactionRepository.save(transaction));
     }
@@ -125,14 +134,17 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     private Category getOwnedCategory(Long categoryId, User user) {
-        Category category = categoryRepository.findById(categoryId)
+        return categoryRepository.findByIdAndUserId(categoryId, user.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Category not found"));
+    }
 
-        if (category.getUser() == null || !category.getUser().getId().equals(user.getId())) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Category not found");
+    private BankAccount getOwnedBankAccount(Long bankAccountId, User user) {
+        if (bankAccountId == null) {
+            return null;
         }
 
-        return category;
+        return bankAccountRepository.findByIdAndUserId(bankAccountId, user.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bank account not found"));
     }
 
     private void validateCategoryType(Category category, String transactionType) {

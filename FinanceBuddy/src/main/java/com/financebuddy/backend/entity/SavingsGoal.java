@@ -22,6 +22,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
+@Deprecated(since = "B-FIX-1.2", forRemoval = false)
 @Table(name = "savings_goals")
 @Getter
 @Setter
