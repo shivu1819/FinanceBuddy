@@ -1,14 +1,14 @@
 package com.financebuddy.backend.tax.service.impl;
 
-import com.financebuddy.backend.tax.calculator.NewRegimeCalculator;
-import com.financebuddy.backend.tax.calculator.OldRegimeCalculator;
 import com.financebuddy.backend.tax.dto.ComparisonResponseDTO;
 import com.financebuddy.backend.tax.dto.RegimeComparisonDetailDTO;
 import com.financebuddy.backend.tax.dto.TaxCalculationRequest;
+import com.financebuddy.backend.tax.dto.TaxCalculationResponse;
+import com.financebuddy.backend.tax.dto.TaxComparisonRequest;
 import com.financebuddy.backend.tax.dto.TaxRecommendationDTO;
 import com.financebuddy.backend.tax.dto.TaxRegime;
-import com.financebuddy.backend.tax.exception.TaxAnalyzerException;
-import com.financebuddy.backend.tax.model.TaxComputation;
+import com.financebuddy.backend.tax.service.TaxCalculationService;
+import com.financebuddy.backend.tax.service.TaxComparisonService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -16,23 +16,18 @@ import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
-public class TaxComparisonServiceImpl implements com.financebuddy.backend.tax.service.TaxComparisonService {
+public class TaxComparisonServiceImpl implements TaxComparisonService {
 
-    private final OldRegimeCalculator oldRegimeCalculator;
-    private final NewRegimeCalculator newRegimeCalculator;
+    private final TaxCalculationService taxCalculationService;
 
-    /**
-     * Calculates old and new regime tax independently, compares final tax, and recommends the better regime.
-     *
-     * @param request tax calculation request
-     * @return detailed comparison response
-     */
     @Override
-    public ComparisonResponseDTO compareRegimes(TaxCalculationRequest request) {
-        validateRequest(request);
-
-        TaxComputation oldRegime = oldRegimeCalculator.calculate(request);
-        TaxComputation newRegime = newRegimeCalculator.calculate(request);
+    public ComparisonResponseDTO compareRegimes(TaxComparisonRequest request) {
+        TaxCalculationResponse oldRegime = taxCalculationService.calculate(
+                toCalculationRequest(request, TaxRegime.OLD)
+        );
+        TaxCalculationResponse newRegime = taxCalculationService.calculate(
+                toCalculationRequest(request, TaxRegime.NEW)
+        );
 
         return ComparisonResponseDTO.builder()
                 .oldRegime(toDetail(oldRegime))
@@ -41,23 +36,25 @@ public class TaxComparisonServiceImpl implements com.financebuddy.backend.tax.se
                 .build();
     }
 
-    private RegimeComparisonDetailDTO toDetail(TaxComputation computation) {
+    private RegimeComparisonDetailDTO toDetail(TaxCalculationResponse calculation) {
         return RegimeComparisonDetailDTO.builder()
-                .taxableIncome(computation.taxableIncome())
-                .totalDeductions(computation.deductions())
-                .taxBeforeCess(computation.taxBeforeRebate().subtract(computation.rebate()).max(BigDecimal.ZERO))
-                .cess(computation.cess())
-                .finalTax(computation.finalTax())
-                .monthlyTax(computation.monthlyTax())
+                .taxableIncome(calculation.getTaxableIncome())
+                .totalDeductions(calculation.getTotalDeductions())
+                .taxBeforeCess(calculation.getTaxBeforeCess())
+                .cess(calculation.getCess())
+                .finalTax(calculation.getFinalTax())
+                .monthlyTax(calculation.getMonthlyTax())
                 .build();
     }
 
-    private TaxRecommendationDTO toRecommendation(TaxComputation oldRegime, TaxComputation newRegime) {
-        BigDecimal differenceInTax = oldRegime.finalTax()
-                .subtract(newRegime.finalTax())
+    private TaxRecommendationDTO toRecommendation(
+            TaxCalculationResponse oldRegime,
+            TaxCalculationResponse newRegime
+    ) {
+        BigDecimal differenceInTax = oldRegime.getFinalTax()
+                .subtract(newRegime.getFinalTax())
                 .abs();
-
-        TaxRegime betterRegime = oldRegime.finalTax().compareTo(newRegime.finalTax()) <= 0
+        TaxRegime betterRegime = oldRegime.getFinalTax().compareTo(newRegime.getFinalTax()) <= 0
                 ? TaxRegime.OLD
                 : TaxRegime.NEW;
 
@@ -65,40 +62,40 @@ public class TaxComparisonServiceImpl implements com.financebuddy.backend.tax.se
                 .differenceInTax(differenceInTax)
                 .amountSaved(differenceInTax)
                 .betterRegime(betterRegime)
-                .reasonForRecommendation(buildRecommendationReason(betterRegime, differenceInTax, oldRegime, newRegime))
+                .reasonForRecommendation(buildRecommendationReason(betterRegime, differenceInTax))
                 .build();
     }
 
-    private String buildRecommendationReason(
-            TaxRegime betterRegime,
-            BigDecimal amountSaved,
-            TaxComputation oldRegime,
-            TaxComputation newRegime
-    ) {
+    private String buildRecommendationReason(TaxRegime betterRegime, BigDecimal amountSaved) {
         if (amountSaved.compareTo(BigDecimal.ZERO) == 0) {
             return "Both regimes result in the same tax liability.";
         }
-
         if (betterRegime == TaxRegime.OLD) {
             return "Old Regime saves Rs. " + amountSaved
                     + " because deductions reduce taxable income.";
         }
-
         return "New Regime saves Rs. " + amountSaved
                 + " because deductions are insufficient.";
     }
 
-    private void validateRequest(TaxCalculationRequest request) {
-        if (request == null) {
-            throw new TaxAnalyzerException("Tax calculation request is required.");
-        }
-
-        if (request.getAnnualIncome() == null) {
-            throw new TaxAnalyzerException("Annual income is required.");
-        }
-
-        if (request.getAnnualIncome().compareTo(BigDecimal.ZERO) < 0) {
-            throw new TaxAnalyzerException("Annual income must not be negative.");
-        }
+    private TaxCalculationRequest toCalculationRequest(TaxComparisonRequest request, TaxRegime regime) {
+        return TaxCalculationRequest.builder()
+                .annualIncome(request.getAnnualIncome())
+                .otherIncome(request.getOtherIncome())
+                .totalDeductions(request.getTotalDeductions())
+                .taxRegime(regime)
+                .age(request.getAge())
+                .section80C(request.getSection80C())
+                .section80D(request.getSection80D())
+                .nps80Ccd(request.getNps80Ccd())
+                .homeLoanInterest(request.getHomeLoanInterest())
+                .professionalTax(request.getProfessionalTax())
+                .basicSalary(request.getBasicSalary())
+                .hraReceived(request.getHraReceived())
+                .rentPaid(request.getRentPaid())
+                .cityType(request.getCityType())
+                .employerNpsContribution(request.getEmployerNpsContribution())
+                .standardDeduction(request.getStandardDeduction())
+                .build();
     }
 }

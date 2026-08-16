@@ -2,6 +2,7 @@ package com.financebuddy.backend.goal;
 
 import com.financebuddy.backend.entity.User;
 import com.financebuddy.backend.repository.UserRepository;
+import com.financebuddy.backend.util.FinancialCalculationUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -10,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -24,6 +25,7 @@ public class GoalServiceImpl implements GoalService {
     @Override
     @Transactional
     public GoalResponse createGoal(GoalRequest request) {
+        validateTargetDate(request.getTargetDate());
         User user = getCurrentUser();
         LocalDateTime now = LocalDateTime.now();
 
@@ -62,8 +64,16 @@ public class GoalServiceImpl implements GoalService {
     @Override
     @Transactional
     public GoalResponse updateGoal(Long id, GoalRequest request) {
+        validateTargetDate(request.getTargetDate());
         User user = getCurrentUser();
-        Goal goal = getOwnedGoal(id, user);
+        Goal goal = getOwnedGoalForUpdate(id, user);
+
+        if (request.getTargetAmount().compareTo(goal.getSavedAmount()) < 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Target amount cannot be less than the amount already saved."
+            );
+        }
 
         goal.setTitle(request.getTitle());
         goal.setDescription(request.getDescription());
@@ -78,12 +88,29 @@ public class GoalServiceImpl implements GoalService {
     @Override
     @Transactional
     public GoalResponse addMoney(Long id, GoalSavingsRequest request) {
-        if (request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+        if (request == null || request.getAmount() == null
+                || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Amount must be greater than zero.");
         }
 
         User user = getCurrentUser();
-        Goal goal = getOwnedGoal(id, user);
+        Goal goal = getOwnedGoalForUpdate(id, user);
+
+        if (goal.getStatus() == GoalStatus.COMPLETED
+                || goal.getSavedAmount().compareTo(goal.getTargetAmount()) >= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Completed goal cannot accept additional contributions."
+            );
+        }
+
+        BigDecimal remainingAmount = goal.getTargetAmount().subtract(goal.getSavedAmount());
+        if (request.getAmount().compareTo(remainingAmount) > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Contribution cannot exceed the remaining goal amount."
+            );
+        }
 
         goal.setSavedAmount(goal.getSavedAmount().add(request.getAmount()));
         goal.setUpdatedAt(LocalDateTime.now());
@@ -105,6 +132,11 @@ public class GoalServiceImpl implements GoalService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Goal not found."));
     }
 
+    private Goal getOwnedGoalForUpdate(Long id, User user) {
+        return goalRepository.findForUpdateByIdAndUser(id, user)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Goal not found."));
+    }
+
     private User getCurrentUser() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         return userRepository.findByEmail(email)
@@ -115,11 +147,12 @@ public class GoalServiceImpl implements GoalService {
     }
 
     private GoalResponse mapToResponse(Goal goal) {
-        updateGoalStatus(goal);
-        BigDecimal remainingAmount = goal.getTargetAmount().subtract(goal.getSavedAmount());
-        if (remainingAmount.compareTo(BigDecimal.ZERO) < 0) {
-            remainingAmount = BigDecimal.ZERO;
-        }
+        BigDecimal remainingAmount = FinancialCalculationUtils.nonNegative(
+                goal.getTargetAmount().subtract(goal.getSavedAmount())
+        );
+        GoalStatus responseStatus = goal.getSavedAmount().compareTo(goal.getTargetAmount()) >= 0
+                ? GoalStatus.COMPLETED
+                : GoalStatus.IN_PROGRESS;
 
         return GoalResponse.builder()
                 .id(goal.getId())
@@ -128,9 +161,12 @@ public class GoalServiceImpl implements GoalService {
                 .targetAmount(goal.getTargetAmount())
                 .savedAmount(goal.getSavedAmount())
                 .remainingAmount(remainingAmount)
-                .progressPercentage(calculateProgressPercentage(goal.getSavedAmount(), goal.getTargetAmount()))
+                .progressPercentage(FinancialCalculationUtils.calculateGoalProgress(
+                        goal.getSavedAmount(),
+                        goal.getTargetAmount()
+                ))
                 .targetDate(goal.getTargetDate())
-                .status(goal.getStatus())
+                .status(responseStatus)
                 .build();
     }
 
@@ -143,15 +179,9 @@ public class GoalServiceImpl implements GoalService {
         goal.setStatus(GoalStatus.IN_PROGRESS);
     }
 
-    private Integer calculateProgressPercentage(BigDecimal savedAmount, BigDecimal targetAmount) {
-        if (targetAmount == null || targetAmount.compareTo(BigDecimal.ZERO) == 0) {
-            return 0;
+    private void validateTargetDate(LocalDate targetDate) {
+        if (targetDate != null && !targetDate.isAfter(LocalDate.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target date must be in the future.");
         }
-
-        int percentage = savedAmount.multiply(BigDecimal.valueOf(100))
-                .divide(targetAmount, 0, RoundingMode.HALF_UP)
-                .intValue();
-
-        return Math.min(percentage, 100);
     }
 }

@@ -27,6 +27,8 @@ public class TaxCalculationResponse {
 
     private BigDecimal deductions;
 
+    private BigDecimal totalDeductions;
+
     private BigDecimal taxBeforeRebate;
 
     private BigDecimal rebate;

@@ -26,7 +26,15 @@ public class DashboardRecentTransactionResponse {
 
     private LocalDate transactionDate;
 
+    private String formattedDate;
+
+    private CategoryResponse category;
+
     private String categoryName;
+
+    private String categoryColor;
+
+    private String categoryIcon;
 
     public enum TransactionType {
         INCOME,

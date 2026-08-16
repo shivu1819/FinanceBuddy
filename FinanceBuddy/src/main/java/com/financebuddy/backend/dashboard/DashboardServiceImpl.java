@@ -3,33 +3,40 @@ package com.financebuddy.backend.dashboard;
 import com.financebuddy.backend.budget.Budget;
 import com.financebuddy.backend.budget.BudgetRepository;
 import com.financebuddy.backend.budget.BudgetStatus;
+import com.financebuddy.backend.dto.CategoryResponse;
 import com.financebuddy.backend.dto.DashboardCategoryExpenseResponse;
+import com.financebuddy.backend.dto.DashboardMonthlyChartResponse;
 import com.financebuddy.backend.dto.DashboardRecentTransactionResponse;
 import com.financebuddy.backend.dto.DashboardSummaryResponse;
+import com.financebuddy.backend.entity.Category;
 import com.financebuddy.backend.entity.Transaction;
 import com.financebuddy.backend.entity.User;
 import com.financebuddy.backend.repository.CategoryRepository;
 import com.financebuddy.backend.repository.TransactionRepository;
 import com.financebuddy.backend.repository.UserRepository;
+import com.financebuddy.backend.util.FinancialCalculationUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Optional;
+import java.util.Locale;
+
+import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 @Service
 @RequiredArgsConstructor
 public class DashboardServiceImpl implements DashboardService {
 
-    private static final int RECENT_TRANSACTION_LIMIT = 5;
+    private static final int RECENT_TRANSACTION_LIMIT = 10;
+    private static final DateTimeFormatter RECENT_DATE_FORMAT =
+            DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH);
 
     private final TransactionRepository transactionRepository;
     private final CategoryRepository categoryRepository;
@@ -37,35 +44,36 @@ public class DashboardServiceImpl implements DashboardService {
     private final BudgetRepository budgetRepository;
 
     @Override
-    @Transactional
+    @Transactional(readOnly = true)
     public DashboardSummaryResponse getSummary() {
         return getDashboardSummary();
     }
 
-    @Transactional
+    @Override
+    @Transactional(readOnly = true)
     public DashboardSummaryResponse getDashboardSummary() {
         User user = getCurrentUser();
         Long userId = user.getId();
-
-        BigDecimal totalIncome = transactionRepository.getTotalIncomeByUserId(userId)
-                .orElse(BigDecimal.ZERO);
-        BigDecimal totalExpense = transactionRepository.getTotalExpenseByUserId(userId)
-                .orElse(BigDecimal.ZERO);
-        BigDecimal totalBalance = totalIncome.subtract(totalExpense);
-        BudgetAnalytics budgetAnalytics = getCurrentBudgetAnalytics(user);
+        TransactionRepository.TransactionTotalsProjection totals =
+                transactionRepository.getTransactionTotalsByUserId(userId);
+        BigDecimal totalIncome = totals == null ? BigDecimal.ZERO : totals.getTotalIncome();
+        BigDecimal totalExpense = totals == null ? BigDecimal.ZERO : totals.getTotalExpense();
+        FinancialCalculationUtils.DashboardCalculation dashboard =
+                FinancialCalculationUtils.calculateDashboardSummary(totalIncome, totalExpense);
+        BudgetAnalytics budget = getCurrentBudgetAnalytics(user);
 
         return DashboardSummaryResponse.builder()
-                .totalIncome(totalIncome)
-                .totalExpense(totalExpense)
-                .totalBalance(totalBalance)
-                .totalSavings(totalBalance)
+                .totalIncome(dashboard.totalIncome())
+                .totalExpense(dashboard.totalExpense())
+                .totalBalance(dashboard.currentBalance())
+                .totalSavings(dashboard.totalSavings())
                 .totalTransactions(transactionRepository.countTransactionsByUserId(userId))
                 .totalCategories(categoryRepository.countCategoriesByUserId(userId))
-                .monthlyBudget(budgetAnalytics.monthlyBudget())
-                .spentBudget(budgetAnalytics.spentBudget())
-                .remainingBudget(budgetAnalytics.remainingBudget())
-                .budgetUsagePercentage(budgetAnalytics.budgetUsagePercentage())
-                .budgetStatus(budgetAnalytics.budgetStatus())
+                .monthlyBudget(budget.monthlyBudget())
+                .spentBudget(budget.spentBudget())
+                .remainingBudget(budget.remainingBudget())
+                .budgetUsagePercentage(budget.budgetUsagePercentage())
+                .budgetStatus(budget.budgetStatus())
                 .build();
     }
 
@@ -73,28 +81,79 @@ public class DashboardServiceImpl implements DashboardService {
     @Transactional(readOnly = true)
     public List<DashboardRecentTransactionResponse> getRecentTransactions() {
         User user = getCurrentUser();
-        List<Transaction> transactions = transactionRepository.findLatestTransactionsByUserId(
-                user.getId(),
-                PageRequest.of(0, RECENT_TRANSACTION_LIMIT)
-        );
-
-        return transactions.stream()
+        return transactionRepository.findLatestTransactionsByUserId(
+                        user.getId(),
+                        PageRequest.of(0, RECENT_TRANSACTION_LIMIT)
+                )
+                .stream()
                 .map(this::mapToRecentTransactionResponse)
                 .toList();
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<DashboardCategoryExpenseResponse> getCategoryExpenses() {
-        return List.of();
+        List<TransactionRepository.CategoryExpenseProjection> expenses =
+                transactionRepository.getCategoryExpensesByUserId(getCurrentUser().getId());
+        BigDecimal totalExpense = expenses.stream()
+                .map(TransactionRepository.CategoryExpenseProjection::getTotalAmount)
+                .map(FinancialCalculationUtils::amountOrZero)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return expenses.stream()
+                .map(expense -> DashboardCategoryExpenseResponse.builder()
+                        .categoryName(expense.getCategoryName())
+                        .categoryColor(expense.getCategoryColor())
+                        .categoryIcon(expense.getCategoryIcon())
+                        .totalAmount(FinancialCalculationUtils.amountOrZero(expense.getTotalAmount()))
+                        .totalExpense(FinancialCalculationUtils.amountOrZero(expense.getTotalAmount()))
+                        .percentage(FinancialCalculationUtils.calculatePercentageValue(
+                                expense.getTotalAmount(),
+                                totalExpense,
+                                2,
+                                true
+                        ))
+                        .build())
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DashboardMonthlyChartResponse> getMonthlyChart() {
+        return transactionRepository.getMonthlyCashFlowByUserId(getCurrentUser().getId())
+                .stream()
+                .map(month -> {
+                    BigDecimal income = FinancialCalculationUtils.amountOrZero(month.getIncome());
+                    BigDecimal expense = FinancialCalculationUtils.amountOrZero(month.getExpense());
+                    return DashboardMonthlyChartResponse.builder()
+                            .month(YearMonth.of(month.getYearValue(), month.getMonthValue()).toString())
+                            .income(income)
+                            .expense(expense)
+                            .savings(FinancialCalculationUtils.calculateSavings(income, expense))
+                            .build();
+                })
+                .toList();
     }
 
     private User getCurrentUser() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         return userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("Authenticated user not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        UNAUTHORIZED,
+                        "Authenticated user not found."
+                ));
     }
 
     private DashboardRecentTransactionResponse mapToRecentTransactionResponse(Transaction transaction) {
+        Category category = transaction.getCategory();
+        CategoryResponse categoryResponse = CategoryResponse.builder()
+                .id(category.getId())
+                .name(category.getName())
+                .type(category.getType())
+                .color(category.getColor())
+                .icon(category.getIcon())
+                .build();
+
         return DashboardRecentTransactionResponse.builder()
                 .id(transaction.getId())
                 .description(transaction.getDescription())
@@ -103,66 +162,43 @@ public class DashboardServiceImpl implements DashboardService {
                         transaction.getTransactionType()
                 ))
                 .transactionDate(transaction.getTransactionDate())
-                .categoryName(transaction.getCategory().getName())
+                .formattedDate(transaction.getTransactionDate().format(RECENT_DATE_FORMAT))
+                .category(categoryResponse)
+                .categoryName(category.getName())
+                .categoryColor(category.getColor())
+                .categoryIcon(category.getIcon())
                 .build();
     }
 
     private BudgetAnalytics getCurrentBudgetAnalytics(User user) {
-        Optional<Budget> budgetOptional = budgetRepository.findByUserAndBudgetMonth(user, YearMonth.now());
-
-        if (budgetOptional.isEmpty()) {
-            return new BudgetAnalytics(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 0, BudgetStatus.SAFE);
-        }
-
-        Budget budget = budgetOptional.get();
-        BigDecimal spent = calculateSpent(budget);
-        BigDecimal remaining = budget.getMonthlyLimit().subtract(spent);
-        Integer percentageUsed = calculatePercentageUsed(spent, budget.getMonthlyLimit());
-        BudgetStatus status = calculateStatus(percentageUsed);
-
-        if (budget.getStatus() != status) {
-            budget.setStatus(status);
-            budget.setUpdatedAt(LocalDateTime.now());
-        }
-
-        return new BudgetAnalytics(budget.getMonthlyLimit(), spent, remaining, percentageUsed, status);
+        return budgetRepository.findByUserAndBudgetMonth(user, YearMonth.now())
+                .map(this::calculateBudgetAnalytics)
+                .orElseGet(() -> new BudgetAnalytics(
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        BigDecimal.ZERO,
+                        0,
+                        BudgetStatus.SAFE
+                ));
     }
 
-    private BigDecimal calculateSpent(Budget budget) {
-        LocalDate startDate = budget.getBudgetMonth().atDay(1);
-        LocalDate endDate = budget.getBudgetMonth().atEndOfMonth();
+    private BudgetAnalytics calculateBudgetAnalytics(Budget budget) {
+        BigDecimal spent = transactionRepository.sumAmountByUserIdAndTransactionTypeAndDateBetween(
+                budget.getUser().getId(),
+                "EXPENSE",
+                budget.getBudgetMonth().atDay(1),
+                budget.getBudgetMonth().atEndOfMonth()
+        );
+        FinancialCalculationUtils.BudgetCalculation calculation =
+                FinancialCalculationUtils.calculateBudget(budget.getMonthlyLimit(), spent);
 
-        return transactionRepository.findByUserIdAndTransactionDateBetween(
-                        budget.getUser().getId(),
-                        startDate,
-                        endDate
-                )
-                .stream()
-                .filter(transaction -> "EXPENSE".equals(transaction.getTransactionType()))
-                .map(transaction -> transaction.getAmount() == null ? BigDecimal.ZERO : transaction.getAmount())
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    private Integer calculatePercentageUsed(BigDecimal spent, BigDecimal monthlyLimit) {
-        if (monthlyLimit == null || monthlyLimit.compareTo(BigDecimal.ZERO) == 0) {
-            return 0;
-        }
-
-        return spent.multiply(BigDecimal.valueOf(100))
-                .divide(monthlyLimit, 0, RoundingMode.HALF_UP)
-                .intValue();
-    }
-
-    private BudgetStatus calculateStatus(Integer percentageUsed) {
-        if (percentageUsed >= 100) {
-            return BudgetStatus.EXCEEDED;
-        }
-
-        if (percentageUsed >= 80) {
-            return BudgetStatus.WARNING;
-        }
-
-        return BudgetStatus.SAFE;
+        return new BudgetAnalytics(
+                calculation.budgetAmount(),
+                calculation.spentAmount(),
+                calculation.remainingAmount(),
+                calculation.usagePercentage(),
+                calculation.status()
+        );
     }
 
     private record BudgetAnalytics(

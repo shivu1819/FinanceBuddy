@@ -1,8 +1,10 @@
 package com.financebuddy.backend.service.impl;
 
 import com.financebuddy.backend.dto.CategoryResponse;
+import com.financebuddy.backend.dto.TransactionPageResponse;
 import com.financebuddy.backend.dto.TransactionRequest;
 import com.financebuddy.backend.dto.TransactionResponse;
+import com.financebuddy.backend.dto.TransactionSortOption;
 import com.financebuddy.backend.entity.Category;
 import com.financebuddy.backend.entity.BankAccount;
 import com.financebuddy.backend.entity.Transaction;
@@ -13,13 +15,19 @@ import com.financebuddy.backend.repository.TransactionRepository;
 import com.financebuddy.backend.repository.UserRepository;
 import com.financebuddy.backend.service.TransactionService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -121,16 +129,63 @@ public class TransactionServiceImpl implements TransactionService {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public TransactionPageResponse searchTransactions(
+            String search,
+            String title,
+            String notes,
+            Long categoryId,
+            String transactionType,
+            LocalDate startDate,
+            LocalDate endDate,
+            BigDecimal minimumAmount,
+            BigDecimal maximumAmount,
+            String sort,
+            int page,
+            int size
+    ) {
+        validateSearchCriteria(
+                categoryId,
+                transactionType,
+                startDate,
+                endDate,
+                minimumAmount,
+                maximumAmount,
+                page,
+                size
+        );
+
+        User user = getCurrentUser();
+        String normalizedType = normalizeTransactionType(transactionType);
+        PageRequest pageRequest = PageRequest.of(page, size, resolveSort(TransactionSortOption.from(sort)));
+        Page<Transaction> transactions = transactionRepository.searchTransactions(
+                user.getId(),
+                toLikeTerm(search),
+                toLikeTerm(title),
+                toLikeTerm(notes),
+                categoryId,
+                normalizedType,
+                startDate,
+                endDate,
+                minimumAmount,
+                maximumAmount,
+                pageRequest
+        );
+
+        return TransactionPageResponse.builder()
+                .content(transactions.getContent().stream().map(this::mapToResponse).toList())
+                .page(transactions.getNumber())
+                .size(transactions.getSize())
+                .totalElements(transactions.getTotalElements())
+                .totalPages(transactions.getTotalPages())
+                .build();
+    }
+
     private Transaction getOwnedTransaction(Long id) {
         User user = getCurrentUser();
-        Transaction transaction = transactionRepository.findById(id)
+        return transactionRepository.findByIdAndUserId(id, user.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found"));
-
-        if (!transaction.getUser().getId().equals(user.getId())) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found");
-        }
-
-        return transaction;
     }
 
     private Category getOwnedCategory(Long categoryId, User user) {
@@ -151,6 +206,91 @@ public class TransactionServiceImpl implements TransactionService {
         if (!category.getType().equals(transactionType)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category type must match transaction type");
         }
+    }
+
+    private void validateSearchCriteria(
+            Long categoryId,
+            String transactionType,
+            LocalDate startDate,
+            LocalDate endDate,
+            BigDecimal minimumAmount,
+            BigDecimal maximumAmount,
+            int page,
+            int size
+    ) {
+        if (categoryId != null && categoryId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category ID must be positive.");
+        }
+        normalizeTransactionType(transactionType);
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Start date must not be after end date.");
+        }
+        if (minimumAmount != null && minimumAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Minimum amount must not be negative.");
+        }
+        if (maximumAmount != null && maximumAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Maximum amount must not be negative.");
+        }
+        if (minimumAmount != null && maximumAmount != null
+                && minimumAmount.compareTo(maximumAmount) > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Minimum amount must not exceed maximum amount."
+            );
+        }
+        if (page < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Page must not be negative.");
+        }
+        if (size < 1 || size > 100) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Size must be between 1 and 100.");
+        }
+    }
+
+    private String normalizeTransactionType(String transactionType) {
+        if (transactionType == null || transactionType.isBlank()) {
+            return null;
+        }
+
+        String normalizedType = transactionType.trim().toUpperCase(Locale.ROOT);
+        if (!"INCOME".equals(normalizedType) && !"EXPENSE".equals(normalizedType)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Transaction type must be INCOME or EXPENSE."
+            );
+        }
+        return normalizedType;
+    }
+
+    private String toLikeTerm(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return "%" + value.trim().toLowerCase(Locale.ROOT) + "%";
+    }
+
+    private Sort resolveSort(TransactionSortOption sortOption) {
+        return switch (sortOption) {
+            case NEWEST -> Sort.by(
+                    Sort.Order.desc("transactionDate"),
+                    Sort.Order.desc("createdAt"),
+                    Sort.Order.desc("id")
+            );
+            case OLDEST -> Sort.by(
+                    Sort.Order.asc("transactionDate"),
+                    Sort.Order.asc("createdAt"),
+                    Sort.Order.asc("id")
+            );
+            case HIGHEST_AMOUNT -> Sort.by(
+                    Sort.Order.desc("amount"),
+                    Sort.Order.desc("transactionDate"),
+                    Sort.Order.desc("id")
+            );
+            case LOWEST_AMOUNT -> Sort.by(
+                    Sort.Order.asc("amount"),
+                    Sort.Order.desc("transactionDate"),
+                    Sort.Order.desc("id")
+            );
+        };
     }
 
     private User getCurrentUser() {

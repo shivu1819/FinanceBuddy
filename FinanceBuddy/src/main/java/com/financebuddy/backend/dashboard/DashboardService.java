@@ -1,6 +1,7 @@
 package com.financebuddy.backend.dashboard;
 
 import com.financebuddy.backend.dto.DashboardCategoryExpenseResponse;
+import com.financebuddy.backend.dto.DashboardMonthlyChartResponse;
 import com.financebuddy.backend.dto.DashboardRecentTransactionResponse;
 import com.financebuddy.backend.dto.DashboardSummaryResponse;
 
@@ -15,4 +16,6 @@ public interface DashboardService {
     List<DashboardRecentTransactionResponse> getRecentTransactions();
 
     List<DashboardCategoryExpenseResponse> getCategoryExpenses();
+
+    List<DashboardMonthlyChartResponse> getMonthlyChart();
 }

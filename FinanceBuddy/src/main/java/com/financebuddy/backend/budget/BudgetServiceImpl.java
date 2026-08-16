@@ -3,6 +3,7 @@ package com.financebuddy.backend.budget;
 import com.financebuddy.backend.entity.User;
 import com.financebuddy.backend.repository.TransactionRepository;
 import com.financebuddy.backend.repository.UserRepository;
+import com.financebuddy.backend.util.FinancialCalculationUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -12,8 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 
@@ -49,7 +48,7 @@ public class BudgetServiceImpl implements BudgetService {
                 .build();
 
         try {
-            return mapToResponse(budgetRepository.saveAndFlush(budget));
+            return mapToResponseWithAnalytics(budgetRepository.saveAndFlush(budget));
         } catch (DataIntegrityViolationException exception) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -107,74 +106,33 @@ public class BudgetServiceImpl implements BudgetService {
                 ));
     }
 
-    private BudgetResponse mapToResponse(Budget budget) {
-        return BudgetResponse.builder()
-                .id(budget.getId())
-                .monthlyLimit(budget.getMonthlyLimit())
-                .spent(BigDecimal.ZERO)
-                .remaining(budget.getMonthlyLimit())
-                .percentageUsed(0)
-                .status(budget.getStatus())
-                .budgetMonth(budget.getBudgetMonth())
-                .build();
-    }
-
     private BudgetResponse mapToResponseWithAnalytics(Budget budget) {
         BigDecimal spent = calculateSpent(budget);
-        BigDecimal remaining = budget.getMonthlyLimit().subtract(spent);
-        Integer percentageUsed = calculatePercentageUsed(spent, budget.getMonthlyLimit());
-        BudgetStatus status = calculateStatus(percentageUsed);
+        FinancialCalculationUtils.BudgetCalculation calculation =
+                FinancialCalculationUtils.calculateBudget(budget.getMonthlyLimit(), spent);
 
-        if (budget.getStatus() != status) {
-            budget.setStatus(status);
+        if (budget.getStatus() != calculation.status()) {
+            budget.setStatus(calculation.status());
             budget.setUpdatedAt(LocalDateTime.now());
         }
 
         return BudgetResponse.builder()
                 .id(budget.getId())
-                .monthlyLimit(budget.getMonthlyLimit())
-                .spent(spent)
-                .remaining(remaining)
-                .percentageUsed(percentageUsed)
-                .status(status)
+                .monthlyLimit(calculation.budgetAmount())
+                .spent(calculation.spentAmount())
+                .remaining(calculation.remainingAmount())
+                .percentageUsed(calculation.usagePercentage())
+                .status(calculation.status())
                 .budgetMonth(budget.getBudgetMonth())
                 .build();
     }
 
     private BigDecimal calculateSpent(Budget budget) {
-        LocalDate startDate = budget.getBudgetMonth().atDay(1);
-        LocalDate endDate = budget.getBudgetMonth().atEndOfMonth();
-
-        return transactionRepository.findByUserIdAndTransactionDateBetween(
-                        budget.getUser().getId(),
-                        startDate,
-                        endDate
-                )
-                .stream()
-                .filter(transaction -> "EXPENSE".equals(transaction.getTransactionType()))
-                .map(transaction -> transaction.getAmount() == null ? BigDecimal.ZERO : transaction.getAmount())
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    private Integer calculatePercentageUsed(BigDecimal spent, BigDecimal monthlyLimit) {
-        if (monthlyLimit == null || monthlyLimit.compareTo(BigDecimal.ZERO) == 0) {
-            return 0;
-        }
-
-        return spent.multiply(BigDecimal.valueOf(100))
-                .divide(monthlyLimit, 0, RoundingMode.HALF_UP)
-                .intValue();
-    }
-
-    private BudgetStatus calculateStatus(Integer percentageUsed) {
-        if (percentageUsed >= 100) {
-            return BudgetStatus.EXCEEDED;
-        }
-
-        if (percentageUsed >= 80) {
-            return BudgetStatus.WARNING;
-        }
-
-        return BudgetStatus.SAFE;
+        return transactionRepository.sumAmountByUserIdAndTransactionTypeAndDateBetween(
+                budget.getUser().getId(),
+                "EXPENSE",
+                budget.getBudgetMonth().atDay(1),
+                budget.getBudgetMonth().atEndOfMonth()
+        );
     }
 }

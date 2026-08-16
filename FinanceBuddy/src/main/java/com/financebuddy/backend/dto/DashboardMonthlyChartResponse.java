@@ -13,17 +13,13 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class DashboardCategoryExpenseResponse {
+public class DashboardMonthlyChartResponse {
 
-    private String categoryName;
+    private String month;
 
-    private String categoryColor;
+    private BigDecimal income;
 
-    private String categoryIcon;
+    private BigDecimal expense;
 
-    private BigDecimal totalAmount;
-
-    private BigDecimal totalExpense;
-
-    private BigDecimal percentage;
+    private BigDecimal savings;
 }

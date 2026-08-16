@@ -3,6 +3,7 @@ package com.financebuddy.backend.tax.controller;
 import com.financebuddy.backend.tax.dto.ComparisonResponseDTO;
 import com.financebuddy.backend.tax.dto.TaxCalculationRequest;
 import com.financebuddy.backend.tax.dto.TaxCalculationResponse;
+import com.financebuddy.backend.tax.dto.TaxComparisonRequest;
 import com.financebuddy.backend.tax.dto.TaxDeductionResponse;
 import com.financebuddy.backend.tax.dto.TaxSlabResponse;
 import com.financebuddy.backend.tax.service.TaxAnalyzerService;
@@ -35,7 +36,7 @@ public class TaxAnalyzerController {
 
     @PostMapping("/compare")
     public ResponseEntity<ComparisonResponseDTO> compareTaxRegimes(
-            @Valid @RequestBody TaxCalculationRequest request
+            @Valid @RequestBody TaxComparisonRequest request
     ) {
         return ResponseEntity.ok(taxComparisonService.compareRegimes(request));
     }

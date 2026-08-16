@@ -8,6 +8,7 @@ import com.financebuddy.backend.tax.dto.TaxRegime;
 import com.financebuddy.backend.tax.exception.TaxAnalyzerException;
 import com.financebuddy.backend.tax.model.TaxComputation;
 import com.financebuddy.backend.tax.service.TaxCalculationService;
+import com.financebuddy.backend.tax.service.TaxRequestValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +20,7 @@ public class TaxCalculationServiceImpl implements TaxCalculationService {
 
     private final OldRegimeCalculator oldRegimeCalculator;
     private final NewRegimeCalculator newRegimeCalculator;
+    private final TaxRequestValidator taxRequestValidator;
 
     /**
      * Calculates detailed Indian income tax for the requested tax regime.
@@ -28,8 +30,8 @@ public class TaxCalculationServiceImpl implements TaxCalculationService {
      */
     @Override
     public TaxCalculationResponse calculate(TaxCalculationRequest request) {
-        validateRequest(request);
-        TaxRegime regime = request.getTaxRegime() == null ? TaxRegime.NEW : request.getTaxRegime();
+        taxRequestValidator.validate(request, true);
+        TaxRegime regime = request.getTaxRegime();
         TaxComputation computation = calculateByRegime(request, regime);
         return toResponse(computation);
     }
@@ -43,7 +45,8 @@ public class TaxCalculationServiceImpl implements TaxCalculationService {
      */
     @Override
     public BigDecimal calculateTaxableIncome(TaxCalculationRequest request, TaxRegime regime) {
-        validateRequest(request);
+        taxRequestValidator.validate(request, false);
+        validateRegime(regime);
         return calculateByRegime(request, regime).taxableIncome();
     }
 
@@ -57,6 +60,10 @@ public class TaxCalculationServiceImpl implements TaxCalculationService {
      */
     @Override
     public BigDecimal calculateTaxBeforeCess(BigDecimal taxableIncome, TaxRegime regime, Integer age) {
+        if (taxableIncome == null || taxableIncome.compareTo(BigDecimal.ZERO) < 0) {
+            throw new TaxAnalyzerException("Taxable income must not be negative.");
+        }
+        validateRegime(regime);
         TaxCalculationRequest request = TaxCalculationRequest.builder()
                 .annualIncome(taxableIncome)
                 .taxRegime(regime)
@@ -81,11 +88,10 @@ public class TaxCalculationServiceImpl implements TaxCalculationService {
     }
 
     private TaxComputation calculateByRegime(TaxCalculationRequest request, TaxRegime regime) {
-        if (regime == TaxRegime.OLD) {
-            return oldRegimeCalculator.calculate(request);
-        }
-
-        return newRegimeCalculator.calculate(request);
+        return switch (regime) {
+            case OLD -> oldRegimeCalculator.calculate(request);
+            case NEW -> newRegimeCalculator.calculate(request);
+        };
     }
 
     private TaxCalculationResponse toResponse(TaxComputation computation) {
@@ -95,32 +101,25 @@ public class TaxCalculationServiceImpl implements TaxCalculationService {
                 .otherIncome(computation.otherIncome())
                 .totalIncome(computation.totalIncome())
                 .deductions(computation.deductions())
+                .totalDeductions(computation.deductions())
                 .taxableIncome(computation.taxableIncome())
                 .taxBeforeRebate(computation.taxBeforeRebate())
                 .rebate(computation.rebate())
                 .taxBeforeCess(computation.taxBeforeRebate().subtract(computation.rebate()).max(BigDecimal.ZERO))
                 .cess(computation.cess())
-                .finalTax(computation.finalTax())
+                .finalTax(computation.finalTax().max(BigDecimal.ZERO))
                 .monthlyTax(computation.monthlyTax())
                 .monthlyTaxLiability(computation.monthlyTax())
-                .taxAmount(computation.finalTax())
+                .taxAmount(computation.finalTax().max(BigDecimal.ZERO))
                 .effectiveTaxRate(computation.effectiveTaxRate())
                 .taxRegime(computation.regime())
                 .message("Tax calculation completed successfully.")
                 .build();
     }
 
-    private void validateRequest(TaxCalculationRequest request) {
-        if (request == null) {
-            throw new TaxAnalyzerException("Tax calculation request is required.");
-        }
-
-        if (request.getAnnualIncome() == null) {
-            throw new TaxAnalyzerException("Annual income is required.");
-        }
-
-        if (request.getAnnualIncome().compareTo(BigDecimal.ZERO) < 0) {
-            throw new TaxAnalyzerException("Annual income must not be negative.");
+    private void validateRegime(TaxRegime regime) {
+        if (regime == null) {
+            throw new TaxAnalyzerException("Tax regime must be OLD or NEW.");
         }
     }
 }

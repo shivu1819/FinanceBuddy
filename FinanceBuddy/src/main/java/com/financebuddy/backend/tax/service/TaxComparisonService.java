@@ -1,7 +1,7 @@
 package com.financebuddy.backend.tax.service;
 
 import com.financebuddy.backend.tax.dto.ComparisonResponseDTO;
-import com.financebuddy.backend.tax.dto.TaxCalculationRequest;
+import com.financebuddy.backend.tax.dto.TaxComparisonRequest;
 
 public interface TaxComparisonService {
 
@@ -11,5 +11,5 @@ public interface TaxComparisonService {
      * @param request tax calculation request
      * @return detailed comparison with recommendation
      */
-    ComparisonResponseDTO compareRegimes(TaxCalculationRequest request);
+    ComparisonResponseDTO compareRegimes(TaxComparisonRequest request);
 }

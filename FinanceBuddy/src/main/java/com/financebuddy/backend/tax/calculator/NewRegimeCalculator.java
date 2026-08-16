@@ -50,7 +50,7 @@ public class NewRegimeCalculator extends AbstractTaxRegimeCalculator {
                 cess,
                 finalTax,
                 monthlyTax(finalTax),
-                effectiveTaxRate(finalTax, grossIncome)
+                effectiveTaxRate(finalTax, totalIncome)
         );
     }
 

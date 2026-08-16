@@ -1,9 +1,11 @@
 package com.financebuddy.backend.goal;
 
-import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -29,11 +31,14 @@ public class GoalRequest {
     private String description;
 
     @NotNull(message = "Target amount is required")
-    @DecimalMin(value = "0.01", message = "Target amount must be greater than zero")
+    @Positive(message = "Target amount must be greater than zero")
     @Digits(integer = 13, fraction = 2, message = "Target amount must be a valid monetary amount")
     private BigDecimal targetAmount;
 
+    @PositiveOrZero(message = "Saved amount must not be negative")
+    @Digits(integer = 13, fraction = 2, message = "Saved amount must be a valid monetary amount")
     private BigDecimal savedAmount;
 
+    @Future(message = "Target date must be in the future")
     private LocalDate targetDate;
 }

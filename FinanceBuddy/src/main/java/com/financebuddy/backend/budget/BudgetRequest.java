@@ -1,8 +1,8 @@
 package com.financebuddy.backend.budget;
 
-import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -20,7 +20,7 @@ import java.time.YearMonth;
 public class BudgetRequest {
 
     @NotNull(message = "Monthly limit is required")
-    @DecimalMin(value = "0.01", message = "Monthly limit must be greater than zero")
+    @Positive(message = "Monthly limit must be greater than zero")
     @Digits(integer = 13, fraction = 2, message = "Monthly limit must be a valid monetary amount")
     private BigDecimal monthlyLimit;
 
