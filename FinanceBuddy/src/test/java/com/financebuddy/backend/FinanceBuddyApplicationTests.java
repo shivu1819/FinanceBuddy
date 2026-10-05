@@ -18,8 +18,8 @@ class FinanceBuddyApplicationTests {
     }
 
     @Test
-    void databaseMigrationsAreAtVersionThreeWithNothingPending() {
-        assertEquals("3", flyway.info().current().getVersion().getVersion());
+    void databaseMigrationsAreAtVersionSevenWithNothingPending() {
+        assertEquals("7", flyway.info().current().getVersion().getVersion());
         assertEquals(0, flyway.info().pending().length);
     }
 

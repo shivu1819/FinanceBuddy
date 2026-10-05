@@ -18,6 +18,10 @@ public class BudgetResponse {
 
     private Long id;
 
+    private Long categoryId;
+
+    private String categoryName;
+
     private BigDecimal monthlyLimit;
 
     private BigDecimal spent;

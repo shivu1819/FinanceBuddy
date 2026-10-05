@@ -32,6 +32,11 @@ public class BudgetController {
         return ResponseEntity.ok(budgetService.getCurrentBudget());
     }
 
+    @GetMapping
+    public ResponseEntity<java.util.List<BudgetResponse>> getBudgets() {
+        return ResponseEntity.ok(budgetService.getBudgets());
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<BudgetResponse> updateBudget(
             @PathVariable Long id,

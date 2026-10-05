@@ -6,6 +6,8 @@ public interface BudgetService {
 
     BudgetResponse getCurrentBudget();
 
+    java.util.List<BudgetResponse> getBudgets();
+
     BudgetResponse updateBudget(Long id, BudgetRequest request);
 
     void deleteBudget(Long id);

@@ -309,6 +309,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .transactionDate(transaction.getTransactionDate())
                 .paymentMethod(transaction.getPaymentMethod())
                 .transactionType(transaction.getTransactionType())
+                .bankAccountId(transaction.getBankAccount() == null ? null : transaction.getBankAccount().getId())
                 .category(CategoryResponse.builder()
                         .id(category.getId())
                         .name(category.getName())

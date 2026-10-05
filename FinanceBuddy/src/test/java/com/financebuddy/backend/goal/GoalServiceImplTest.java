@@ -122,6 +122,30 @@ class GoalServiceImplTest {
     }
 
     @Test
+    void initialSavedAmountIsPersistedAndCannotExceedTarget() {
+        GoalRequest request = GoalRequest.builder()
+                .title("Emergency fund")
+                .targetAmount(new BigDecimal("1000.00"))
+                .savedAmount(new BigDecimal("250.00"))
+                .targetDate(LocalDate.now().plusMonths(2))
+                .build();
+        when(goalRepository.save(any(Goal.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        GoalResponse response = goalService.createGoal(request);
+
+        assertEquals(0, response.getSavedAmount().compareTo(new BigDecimal("250.00")));
+        assertEquals(25, response.getProgressPercentage());
+
+        GoalRequest excessive = GoalRequest.builder()
+                .title("Invalid fund")
+                .targetAmount(new BigDecimal("100.00"))
+                .savedAmount(new BigDecimal("100.01"))
+                .targetDate(LocalDate.now().plusMonths(2))
+                .build();
+        assertThrows(ResponseStatusException.class, () -> goalService.createGoal(excessive));
+    }
+
+    @Test
     void zeroAndNegativeContributionsAreRejected() {
         assertThrows(
                 ResponseStatusException.class,

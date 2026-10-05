@@ -12,6 +12,8 @@ public interface RecurringTransactionRepository extends JpaRepository<RecurringT
 
     List<RecurringTransaction> findByUserIdAndActiveTrue(Long userId);
 
+    java.util.Optional<RecurringTransaction> findByIdAndUserId(Long id, Long userId);
+
     List<RecurringTransaction> findByActiveTrueAndNextRunDateLessThanEqual(LocalDate runDate);
 
     List<RecurringTransaction> findByUserIdAndFrequency(Long userId, String frequency);

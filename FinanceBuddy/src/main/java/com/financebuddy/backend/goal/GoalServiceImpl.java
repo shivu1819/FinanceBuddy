@@ -26,6 +26,15 @@ public class GoalServiceImpl implements GoalService {
     @Transactional
     public GoalResponse createGoal(GoalRequest request) {
         validateTargetDate(request.getTargetDate());
+        BigDecimal savedAmount = request.getSavedAmount() == null
+                ? BigDecimal.ZERO
+                : request.getSavedAmount();
+        if (savedAmount.compareTo(request.getTargetAmount()) > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Saved amount cannot exceed the target amount."
+            );
+        }
         User user = getCurrentUser();
         LocalDateTime now = LocalDateTime.now();
 
@@ -34,9 +43,11 @@ public class GoalServiceImpl implements GoalService {
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .targetAmount(request.getTargetAmount())
-                .savedAmount(BigDecimal.ZERO)
+                .savedAmount(savedAmount)
                 .targetDate(request.getTargetDate())
-                .status(GoalStatus.IN_PROGRESS)
+                .status(savedAmount.compareTo(request.getTargetAmount()) >= 0
+                        ? GoalStatus.COMPLETED
+                        : GoalStatus.IN_PROGRESS)
                 .createdAt(now)
                 .updatedAt(now)
                 .build();

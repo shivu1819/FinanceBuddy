@@ -24,6 +24,9 @@ public class BudgetRequest {
     @Digits(integer = 13, fraction = 2, message = "Monthly limit must be a valid monetary amount")
     private BigDecimal monthlyLimit;
 
+    @Positive(message = "Category ID must be positive")
+    private Long categoryId;
+
     @NotNull(message = "Budget month is required")
     private YearMonth budgetMonth;
 }

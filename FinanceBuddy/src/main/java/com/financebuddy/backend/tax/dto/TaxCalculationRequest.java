@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Pattern;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -19,6 +20,9 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @Builder
 public class TaxCalculationRequest {
+
+    @Pattern(regexp = "^\\d{4}-\\d{2}$", message = "Financial year must use YYYY-YY format")
+    private String financialYear;
 
     @NotNull(message = "Annual income is required")
     @PositiveOrZero(message = "Annual income must not be negative")

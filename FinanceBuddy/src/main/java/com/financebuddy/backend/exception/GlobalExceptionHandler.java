@@ -1,6 +1,8 @@
 package com.financebuddy.backend.exception;
 
 import com.financebuddy.backend.dto.ErrorResponse;
+import com.financebuddy.backend.receipt.ReceiptOcrException;
+import com.financebuddy.backend.receipt.ReceiptValidationException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
@@ -18,9 +20,11 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.Instant;
 import java.util.Locale;
@@ -78,6 +82,38 @@ public class GlobalExceptionHandler {
                 "Invalid value for " + exception.getName() + ".",
                 request
         );
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponse> handleMissingRequestPart(
+            MissingServletRequestPartException exception,
+            HttpServletRequest request
+    ) {
+        return buildResponse(HttpStatus.BAD_REQUEST, "Receipt image is required.", request);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSize(
+            MaxUploadSizeExceededException exception,
+            HttpServletRequest request
+    ) {
+        return buildResponse(HttpStatus.PAYLOAD_TOO_LARGE, "Receipt image must not exceed 5 MB.", request);
+    }
+
+    @ExceptionHandler(ReceiptValidationException.class)
+    public ResponseEntity<ErrorResponse> handleReceiptValidation(
+            ReceiptValidationException exception,
+            HttpServletRequest request
+    ) {
+        return buildResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(ReceiptOcrException.class)
+    public ResponseEntity<ErrorResponse> handleReceiptOcr(
+            ReceiptOcrException exception,
+            HttpServletRequest request
+    ) {
+        return buildResponse(HttpStatus.UNPROCESSABLE_ENTITY, exception.getMessage(), request);
     }
 
     @ExceptionHandler(ResponseStatusException.class)

@@ -1,6 +1,8 @@
 package com.financebuddy.backend.budget;
 
 import com.financebuddy.backend.entity.User;
+import com.financebuddy.backend.entity.Category;
+import com.financebuddy.backend.repository.CategoryRepository;
 import com.financebuddy.backend.repository.TransactionRepository;
 import com.financebuddy.backend.repository.UserRepository;
 import com.financebuddy.backend.util.FinancialCalculationUtils;
@@ -23,23 +25,20 @@ public class BudgetServiceImpl implements BudgetService {
     private final BudgetRepository budgetRepository;
     private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
+    private final CategoryRepository categoryRepository;
 
     @Override
     @Transactional
     public BudgetResponse createBudget(BudgetRequest request) {
         User user = getCurrentUser();
+        Category category = getOptionalOwnedCategory(request.getCategoryId(), user);
 
-        budgetRepository.findByUserAndBudgetMonth(user, request.getBudgetMonth())
-                .ifPresent(existingBudget -> {
-                    throw new ResponseStatusException(
-                            HttpStatus.CONFLICT,
-                            "Budget already exists for this month."
-                    );
-                });
+        ensureNoDuplicateBudget(user, category, request.getBudgetMonth());
 
         LocalDateTime now = LocalDateTime.now();
         Budget budget = Budget.builder()
                 .user(user)
+                .category(category)
                 .monthlyLimit(request.getMonthlyLimit())
                 .budgetMonth(request.getBudgetMonth())
                 .status(BudgetStatus.SAFE)
@@ -73,12 +72,24 @@ public class BudgetServiceImpl implements BudgetService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public java.util.List<BudgetResponse> getBudgets() {
+        User user = getCurrentUser();
+        return budgetRepository.findByUserOrderByBudgetMonthDesc(user).stream()
+                .map(this::mapToResponseWithAnalytics).toList();
+    }
+
+    @Override
     @Transactional
     public BudgetResponse updateBudget(Long id, BudgetRequest request) {
         User user = getCurrentUser();
         Budget budget = getOwnedBudget(id, user);
+        Category category = getOptionalOwnedCategory(request.getCategoryId(), user);
+        ensureNoDuplicateBudget(user, category, request.getBudgetMonth(), budget.getId());
 
         budget.setMonthlyLimit(request.getMonthlyLimit());
+        budget.setCategory(category);
+        budget.setBudgetMonth(request.getBudgetMonth());
         budget.setUpdatedAt(LocalDateTime.now());
 
         return mapToResponseWithAnalytics(budgetRepository.save(budget));
@@ -118,6 +129,8 @@ public class BudgetServiceImpl implements BudgetService {
 
         return BudgetResponse.builder()
                 .id(budget.getId())
+                .categoryId(budget.getCategory() == null ? null : budget.getCategory().getId())
+                .categoryName(budget.getCategory() == null ? null : budget.getCategory().getName())
                 .monthlyLimit(calculation.budgetAmount())
                 .spent(calculation.spentAmount())
                 .remaining(calculation.remainingAmount())
@@ -127,10 +140,47 @@ public class BudgetServiceImpl implements BudgetService {
                 .build();
     }
 
+    private Category getOptionalOwnedCategory(Long categoryId, User user) {
+        if (categoryId == null) {
+            return null;
+        }
+        return categoryRepository.findByIdAndUserId(categoryId, user.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Category not found."));
+    }
+
+    private void ensureNoDuplicateBudget(User user, Category category, YearMonth budgetMonth) {
+        ensureNoDuplicateBudget(user, category, budgetMonth, null);
+    }
+
+    private void ensureNoDuplicateBudget(
+            User user,
+            Category category,
+            YearMonth budgetMonth,
+            Long excludedBudgetId
+    ) {
+        java.util.Optional<Budget> existing = category == null
+                ? budgetRepository.findByUserAndBudgetMonth(user, budgetMonth)
+                : budgetRepository.findByUserAndCategoryAndBudgetMonth(user, category, budgetMonth);
+
+        existing.filter(budget -> !budget.getId().equals(excludedBudgetId)).ifPresent(budget -> {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    category == null
+                            ? "Budget already exists for this month."
+                            : "Budget already exists for this category and month."
+            );
+        });
+    }
+
     private BigDecimal calculateSpent(Budget budget) {
-        return transactionRepository.sumAmountByUserIdAndTransactionTypeAndDateBetween(
+        if (budget.getCategory() == null) {
+            return transactionRepository.sumAmountByUserIdAndTransactionTypeAndDateBetween(
+                    budget.getUser().getId(), "EXPENSE",
+                    budget.getBudgetMonth().atDay(1), budget.getBudgetMonth().atEndOfMonth());
+        }
+        return transactionRepository.sumExpenseByUserIdAndCategoryIdAndDateBetween(
                 budget.getUser().getId(),
-                "EXPENSE",
+                budget.getCategory().getId(),
                 budget.getBudgetMonth().atDay(1),
                 budget.getBudgetMonth().atEndOfMonth()
         );

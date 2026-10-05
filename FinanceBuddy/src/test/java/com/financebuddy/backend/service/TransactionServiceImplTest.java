@@ -127,7 +127,7 @@ class TransactionServiceImplTest {
         assertEquals(5, response.getTotalElements());
         assertEquals(3, response.getTotalPages());
         assertEquals(1, response.getContent().size());
-        assertEquals("Morning coffee memo", response.getContent().getFirst().getDescription());
+        assertEquals("Morning coffee memo", response.getContent().get(0).getDescription());
 
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
         verify(transactionRepository).searchTransactions(

@@ -1,6 +1,7 @@
 package com.financebuddy.backend.budget;
 
 import com.financebuddy.backend.entity.User;
+import com.financebuddy.backend.entity.Category;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -29,8 +30,8 @@ import java.time.YearMonth;
 @Table(
         name = "budgets",
         uniqueConstraints = @UniqueConstraint(
-                name = "uk_budgets_user_month",
-                columnNames = {"user_id", "budget_month"}
+                name = "uk_budgets_user_category_month",
+                columnNames = {"user_id", "category_id", "budget_month"}
         )
 )
 @Getter
@@ -53,6 +54,10 @@ public class Budget {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private BudgetStatus status;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private Category category;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)

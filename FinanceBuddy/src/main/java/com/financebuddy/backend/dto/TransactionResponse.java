@@ -28,5 +28,7 @@ public class TransactionResponse {
 
     private String transactionType;
 
+    private Long bankAccountId;
+
     private CategoryResponse category;
 }

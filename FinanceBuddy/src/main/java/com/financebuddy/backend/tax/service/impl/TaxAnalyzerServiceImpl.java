@@ -60,6 +60,7 @@ public class TaxAnalyzerServiceImpl implements TaxAnalyzerService {
 
     private TaxCalculationRequest toCalculationRequest(TaxComparisonRequest request, TaxRegime regime) {
         return TaxCalculationRequest.builder()
+                .financialYear(request.getFinancialYear())
                 .annualIncome(request.getAnnualIncome())
                 .otherIncome(request.getOtherIncome())
                 .totalDeductions(request.getTotalDeductions())

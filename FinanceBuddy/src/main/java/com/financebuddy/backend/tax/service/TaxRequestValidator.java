@@ -17,6 +17,9 @@ public class TaxRequestValidator {
         if (request.getAnnualIncome() == null) {
             throw new TaxAnalyzerException("Annual income is required.");
         }
+        if (request.getFinancialYear() != null && !request.getFinancialYear().matches("\\d{4}-\\d{2}")) {
+            throw new TaxAnalyzerException("Financial year must use YYYY-YY format.");
+        }
         if (requireRegime && request.getTaxRegime() == null) {
             throw new TaxAnalyzerException("Tax regime must be OLD or NEW.");
         }
