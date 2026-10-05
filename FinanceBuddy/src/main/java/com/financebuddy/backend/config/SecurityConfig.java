@@ -1,5 +1,6 @@
 package com.financebuddy.backend.config;
 
+import com.financebuddy.backend.security.JwtAccessDeniedHandler;
 import com.financebuddy.backend.security.JwtAuthenticationEntryPoint;
 import com.financebuddy.backend.security.JwtAuthenticationFilter;
 
@@ -8,10 +9,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -24,61 +31,102 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
-    private final AuthenticationProvider authenticationProvider;
+    private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
+    private final UserDetailsService userDetailsService;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
         http
-                // Enable CORS
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
-                // Disable CSRF because this is a stateless REST API
-                .csrf(csrf -> csrf.disable())
+                .csrf(AbstractHttpConfigurer::disable)
 
-                // Return 401 for unauthenticated requests
+                .formLogin(AbstractHttpConfigurer::disable)
+
+                .httpBasic(AbstractHttpConfigurer::disable)
+
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
+
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        .accessDeniedHandler(jwtAccessDeniedHandler)
                 )
 
-                // Stateless JWT authentication
-                .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                )
-
-                // Authorization rules
                 .authorizeHttpRequests(auth -> auth
 
-                        // IMPORTANT:
-                        // Browser sends OPTIONS before POST from Vercel.
-                        // This must be allowed without authentication.
+                        // CORS preflight requests
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // Authentication endpoints are public
+                        // Public authentication endpoints
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/auth/register",
+                                "/api/auth/login"
+                        ).permitAll()
+
+                        // Other public resources
+                        .requestMatchers(
+                                "/error",
+                                "/css/**",
+                                "/js/**",
+                                "/images/**",
+                                "/webjars/**"
+                        ).permitAll()
+
+                        // Admin endpoints
+                        .requestMatchers(
+                                "/admin/**",
+                                "/api/admin/**"
+                        ).hasRole("ADMIN")
+
+                        // User endpoints
+                        .requestMatchers(
+                                "/user/**",
+                                "/api/user/**"
+                        ).hasAnyRole("USER", "ADMIN")
+
+                        // Other auth endpoints
                         .requestMatchers("/api/auth/**").permitAll()
 
-                        // Allow basic public endpoints if present
-                        .requestMatchers("/error").permitAll()
-
-                        // Everything else requires JWT
+                        // Everything else requires authentication
                         .anyRequest().authenticated()
                 )
 
-                // Use existing authentication provider
-                .authenticationProvider(authenticationProvider)
+                .authenticationProvider(authenticationProvider())
 
-                // JWT filter must run before username/password authentication
                 .addFilterBefore(
                         jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class
                 );
 
         return http.build();
+    }
+
+    @Bean
+    public AuthenticationProvider authenticationProvider() {
+
+        DaoAuthenticationProvider authProvider =
+                new DaoAuthenticationProvider(userDetailsService);
+
+        authProvider.setPasswordEncoder(passwordEncoder());
+
+        return authProvider;
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(
+            AuthenticationConfiguration config
+    ) throws Exception {
+        return config.getAuthenticationManager();
     }
 
     @Bean
@@ -91,14 +139,13 @@ public class SecurityConfig {
 
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // Frontend origins
         configuration.setAllowedOriginPatterns(List.of(
                 "https://finance-buddy-wine.vercel.app",
+                "https://*.vercel.app",
                 "http://localhost:*",
                 "http://127.0.0.1:*"
         ));
 
-        // HTTP methods
         configuration.setAllowedMethods(List.of(
                 "GET",
                 "POST",
@@ -108,7 +155,6 @@ public class SecurityConfig {
                 "OPTIONS"
         ));
 
-        // Request headers
         configuration.setAllowedHeaders(List.of(
                 "Authorization",
                 "Content-Type",
@@ -117,12 +163,10 @@ public class SecurityConfig {
                 "X-Requested-With"
         ));
 
-        // Response headers accessible by frontend
         configuration.setExposedHeaders(List.of(
                 "Authorization"
         ));
 
-        // Your frontend uses Authorization header, not cookies
         configuration.setAllowCredentials(false);
 
         UrlBasedCorsConfigurationSource source =
