@@ -23,7 +23,7 @@ public class AIChatService {
 
     public AIChatService(
             @Value("${gemini.api-key}") String apiKey,
-            @Value("${gemini.model:gemini-3.8-flash}") String model,
+            @Value("${gemini.model:gemini-3.8-flash-lite}") String model,
             ObjectMapper objectMapper) {
 
         this.apiKey = apiKey;
