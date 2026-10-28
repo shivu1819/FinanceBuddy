@@ -36,7 +36,7 @@ function AppRoutes() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/investments" element={<Investments />} />
         <Route path="/receipts" element={<Receipts />} />
-        <Route path="/bill-split" element={<BillSplit />} />
+        <Route path="/billsplit" element={<BillSplit/>} />
         <Route path="/recurring-transactions" element={<RecurringTransactions />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/reports" element={<Reports />} />

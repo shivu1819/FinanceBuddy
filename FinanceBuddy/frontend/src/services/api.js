@@ -1,7 +1,12 @@
+
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: 'https://financebuddy-i82n.onrender.com/api',
+  baseURL: 'http://localhost:8081/api',
+  timeout: 60000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 })
 
 api.interceptors.request.use((config) => {
